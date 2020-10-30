@@ -133,7 +133,7 @@ class MainActivity : AppCompatActivity() {
     @SuppressLint("MissingPermission")
     private fun startCamera() {
         manager = getSystemService(Context.CAMERA_SERVICE) as CameraManager
-        manager?.openCamera("5", callback, mCamerHandler)
+        manager?.openCamera("5", callback, null)
         return
     }
 
