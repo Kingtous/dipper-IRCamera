@@ -7,6 +7,8 @@ import android.graphics.SurfaceTexture
 import android.hardware.camera2.CameraCaptureSession
 import android.hardware.camera2.CameraDevice
 import android.hardware.camera2.CameraManager
+import android.hardware.camera2.params.OutputConfiguration
+import android.hardware.camera2.params.SessionConfiguration
 import android.os.Bundle
 import android.util.Log.d
 import android.view.Menu
@@ -18,6 +20,7 @@ import androidx.core.content.PermissionChecker
 import com.google.android.material.floatingactionbutton.FloatingActionButton
 import com.google.android.material.snackbar.Snackbar
 import kotlinx.android.synthetic.main.activity_main.*
+import java.util.concurrent.Executor
 
 class MainActivity : AppCompatActivity() {
 
@@ -109,7 +112,17 @@ class MainActivity : AppCompatActivity() {
                     cameraDevice?.let { cameraDevice ->
                         surface = Surface(p0)
                         cameraDevice.createCaptureRequest(CameraDevice.TEMPLATE_STILL_CAPTURE)
-                        cameraDevice.createCaptureSession(listOf(surface), sessionCallback, null)
+                        cameraDevice.createCaptureSession(
+                            SessionConfiguration(
+                                SessionConfiguration.SESSION_REGULAR,
+                                listOf(OutputConfiguration(surface!!)),
+                                Executor {
+                                    // 直接执行
+                                    it.run()
+                                },
+                                sessionCallback
+                            )
+                        )
                     }
 
                 }
@@ -128,6 +141,7 @@ class MainActivity : AppCompatActivity() {
                 }
 
             }
+
     }
 
     @SuppressLint("MissingPermission")
