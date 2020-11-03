@@ -11,18 +11,14 @@ import android.hardware.camera2.params.OutputConfiguration
 import android.hardware.camera2.params.SessionConfiguration
 import android.os.Bundle
 import android.util.Log.d
-import android.view.Menu
-import android.view.MenuItem
-import android.view.Surface
-import android.view.TextureView
+import android.view.*
 import androidx.appcompat.app.AppCompatActivity
 import androidx.core.content.PermissionChecker
-import com.google.android.material.floatingactionbutton.FloatingActionButton
 import com.google.android.material.snackbar.Snackbar
 import kotlinx.android.synthetic.main.activity_main.*
 import java.util.concurrent.Executor
 
-class MainActivity : AppCompatActivity() {
+class MainActivity : AppCompatActivity(), View.OnClickListener {
 
     val CAMERA_CODE = 1000
 
@@ -30,27 +26,8 @@ class MainActivity : AppCompatActivity() {
         super.onCreate(savedInstanceState)
         setContentView(R.layout.activity_main)
         setSupportActionBar(findViewById(R.id.toolbar))
-
-        findViewById<FloatingActionButton>(R.id.fab).setOnClickListener { view ->
-            Snackbar.make(view, "Replace with your own action", Snackbar.LENGTH_LONG)
-                .setAction("Action", null).show()
-        }
-
-        if (PermissionChecker.checkSelfPermission(
-                this,
-                Manifest.permission.CAMERA
-            ) != PermissionChecker.PERMISSION_GRANTED
-        ) {
-            requestPermissions(
-                arrayOf(
-                    Manifest.permission.CAMERA,
-                    Manifest.permission.WRITE_EXTERNAL_STORAGE,
-                    Manifest.permission.READ_EXTERNAL_STORAGE
-                ), CAMERA_CODE
-            )
-        } else {
-            startCamera()
-        }
+        getCameraView()
+        capture.setOnClickListener(this)
     }
 
     override fun onCreateOptionsMenu(menu: Menu): Boolean {
@@ -73,7 +50,20 @@ class MainActivity : AppCompatActivity() {
     private val callback = object : CameraDevice.StateCallback() {
         override fun onOpened(p0: CameraDevice) {
             cameraDevice = p0
-            getCameraView()
+            cameraDevice?.let { cameraDevice ->
+                cameraDevice.createCaptureRequest(CameraDevice.TEMPLATE_STILL_CAPTURE)
+                cameraDevice.createCaptureSession(
+                    SessionConfiguration(
+                        SessionConfiguration.SESSION_REGULAR,
+                        listOf(OutputConfiguration(surface!!)),
+                        Executor {
+                            // 直接执行
+                            it.run()
+                        },
+                        sessionCallback
+                    )
+                )
+            }
         }
 
         override fun onDisconnected(p0: CameraDevice) {
@@ -88,8 +78,10 @@ class MainActivity : AppCompatActivity() {
     private var cameraDevice: CameraDevice? = null
     private var manager: CameraManager? = null
     private var surface: Surface? = null
+    private var captureSession: CameraCaptureSession? = null
     private val sessionCallback = object : CameraCaptureSession.StateCallback() {
         override fun onConfigured(session: CameraCaptureSession) {
+            captureSession = session
             val builder = cameraDevice?.createCaptureRequest(CameraDevice.TEMPLATE_PREVIEW)
             surface?.let {
                 builder?.addTarget(it)
@@ -109,22 +101,22 @@ class MainActivity : AppCompatActivity() {
             object : TextureView.SurfaceTextureListener {
                 @SuppressLint("NewApi")
                 override fun onSurfaceTextureAvailable(p0: SurfaceTexture, p1: Int, p2: Int) {
-                    cameraDevice?.let { cameraDevice ->
-                        surface = Surface(p0)
-                        cameraDevice.createCaptureRequest(CameraDevice.TEMPLATE_STILL_CAPTURE)
-                        cameraDevice.createCaptureSession(
-                            SessionConfiguration(
-                                SessionConfiguration.SESSION_REGULAR,
-                                listOf(OutputConfiguration(surface!!)),
-                                Executor {
-                                    // 直接执行
-                                    it.run()
-                                },
-                                sessionCallback
-                            )
+                    surface = Surface(p0)
+                    if (PermissionChecker.checkSelfPermission(
+                            this@MainActivity,
+                            Manifest.permission.CAMERA
+                        ) != PermissionChecker.PERMISSION_GRANTED
+                    ) {
+                        requestPermissions(
+                            arrayOf(
+                                Manifest.permission.CAMERA,
+                                Manifest.permission.WRITE_EXTERNAL_STORAGE,
+                                Manifest.permission.READ_EXTERNAL_STORAGE
+                            ), CAMERA_CODE
                         )
+                    } else {
+                        startCamera()
                     }
-
                 }
 
                 override fun onSurfaceTextureSizeChanged(p0: SurfaceTexture, p1: Int, p2: Int) {
@@ -141,7 +133,6 @@ class MainActivity : AppCompatActivity() {
                 }
 
             }
-
     }
 
     @SuppressLint("MissingPermission")
@@ -160,11 +151,35 @@ class MainActivity : AppCompatActivity() {
         if (requestCode == CAMERA_CODE) {
             for (element in grantResults) {
                 if (element != PermissionChecker.PERMISSION_GRANTED) {
-                    Snackbar.make(fab.rootView, "权限未允许", Snackbar.LENGTH_LONG).show()
+                    Snackbar.make(capture.rootView, "权限未允许", Snackbar.LENGTH_LONG).show()
                     return
                 }
             }
             startCamera()
         }
+    }
+
+    override fun onClick(view: View?) {
+        view?.let {
+            if (it.id == R.id.capture) {
+                val captureBuilder =
+                    cameraDevice?.createCaptureRequest(CameraDevice.TEMPLATE_STILL_CAPTURE)
+                surface?.let { sf ->
+                    captureBuilder?.let { builder ->
+                        builder.addTarget(sf)
+                        captureSession?.stopRepeating()
+                        captureSession?.abortCaptures()
+                        captureSession?.capture(builder.build(), captureCallback, null)
+
+                    }
+                }
+            }
+        }
+
+    }
+
+    private var captureCallback = object :
+        CameraCaptureSession.CaptureCallback() {
+
     }
 }
